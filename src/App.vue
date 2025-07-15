@@ -11,6 +11,7 @@ const indicatorDistancePercent = ref(5);
 const confidenceRangePercent = ref(5);
 const confidenceOpacity = ref(0.6);
 const confidenceColor = ref('#a7f3d0');
+const confidenceBoxCrossDimension = ref(20); // New reactive state for cross dimension
 const transitionDuration = ref(0.3);
 const orientation = ref('horizontal');
 const scalePadding = ref(50);
@@ -94,9 +95,9 @@ onUnmounted(() => {
       <LinearScale :value="currentValue" :indicatorSize="indicatorSize" :indicatorColor="indicatorColor"
         :indicatorOpacity="indicatorOpacity" :indicatorDistancePercent="indicatorDistancePercent"
         :confidenceRangePercent="confidenceRangePercent" :confidenceOpacity="confidenceOpacity"
-        :confidenceColor="confidenceColor" :transitionDuration="transitionDuration" :orientation="orientation"
-        :scalePadding="scalePadding" :percentCenter="percentCenter" :percentMid="percentMid"
-        :percentOuter="percentOuter" />
+        :confidenceColor="confidenceColor" :confidenceBoxCrossDimension="confidenceBoxCrossDimension"
+        :transitionDuration="transitionDuration" :orientation="orientation" :scalePadding="scalePadding"
+        :percentCenter="percentCenter" :percentMid="percentMid" :percentOuter="percentOuter" />
     </div>
 
     <div class="controls-container mt-8">
@@ -155,6 +156,11 @@ onUnmounted(() => {
             <label for="confidence-range-percent" class="text-sm text-gray-600">Width (% of scale):</label>
             <input type="number" id="confidence-range-percent" v-model.number="confidenceRangePercent" min="0" max="100"
               step="0.1" :disabled="isSimulationRunning">
+          </div>
+          <div class="flex flex-col items-center">
+            <label for="confidence-box-cross-dimension" class="text-sm text-gray-600">Cross Dimension (px):</label>
+            <input type="number" id="confidence-box-cross-dimension" v-model.number="confidenceBoxCrossDimension"
+              min="5" max="50" step="1" :disabled="isSimulationRunning">
           </div>
           <div class="flex flex-col items-center">
             <label for="confidence-opacity" class="text-sm text-gray-600">Opacity (0-1):</label>

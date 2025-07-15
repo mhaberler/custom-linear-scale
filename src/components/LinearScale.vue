@@ -1,6 +1,6 @@
 <script setup>
 import * as d3 from 'd3';
-import { ref, onMounted, watch, onUnmounted } from 'vue'; // Added onUnmounted
+import { ref, onMounted, watch, onUnmounted } from 'vue';
 
 // Define props for all configurable aspects of the scale
 const props = defineProps({
@@ -35,6 +35,10 @@ const props = defineProps({
     confidenceColor: {
         type: String,
         default: '#a7f3d0'
+    },
+    confidenceBoxCrossDimension: { // New prop for cross dimension
+        type: Number,
+        default: 20
     },
     transitionDuration: {
         type: Number,
@@ -182,14 +186,14 @@ function updateIndicatorAndConfidence() {
     if (props.orientation === 'horizontal') {
         d3svg.select(".confidence-box")
             .attr("x", pos - confidencePx / 2)
-            .attr("y", svgHeight.value / 2 - 10) // Use dynamic svgHeight
+            .attr("y", svgHeight.value / 2 - (props.confidenceBoxCrossDimension / 2)) // Use configurable cross-dimension
             .attr("width", confidencePx)
-            .attr("height", 20);
+            .attr("height", props.confidenceBoxCrossDimension); // Use configurable cross-dimension
     } else { // vertical
         d3svg.select(".confidence-box")
-            .attr("x", svgWidth.value / 2 - 10) // Use dynamic svgWidth
+            .attr("x", svgWidth.value / 2 - (props.confidenceBoxCrossDimension / 2)) // Use configurable cross-dimension
             .attr("y", pos - confidencePx / 2)
-            .attr("width", 20)
+            .attr("width", props.confidenceBoxCrossDimension) // Use configurable cross-dimension
             .attr("height", confidencePx);
     }
 }
@@ -222,6 +226,7 @@ function drawScale() {
     const indicatorDistancePercent = props.indicatorDistancePercent;
     const confidenceOpacity = props.confidenceOpacity;
     const confidenceColor = props.confidenceColor;
+    const confidenceBoxCrossDimension = props.confidenceBoxCrossDimension; // Get new prop
     const transitionDuration = props.transitionDuration;
 
     // Set SVG dimensions and viewBox based on orientation and current size
@@ -372,40 +377,7 @@ onMounted(() => {
     // Get initial dimensions from the parent container
     if (svgRef.value && svgRef.value.parentElement) {
         svgWidth.value = svgRef.value.parentElement.clientWidth;
-        svgHeight.value = props.orientation === 'horizontal' ? 200 : 900; // Default heights for initial render
-        // For vertical, we might want a fixed width, but dynamic height.
-        // Let's make it responsive based on parent's width, and set height based on orientation.
-        // The previous verticalScaleWidth (300) can be a target width for vertical mode.
-        // For simplicity, let's make the SVG take the full width of its container,
-        // and its height will be fixed for horizontal, or a larger fixed value for vertical.
-        // This is a common approach for responsive D3 charts where aspect ratio is important.
-        // If we want the SVG itself to be fully fluid in both dimensions, we'd need more complex logic
-        // or rely purely on viewBox and CSS aspect-ratio.
-        // For now, let's assume the parent dictates width, and height is semi-fixed or proportional.
-        // Given the previous verticalScaleWidth, let's interpret it as a desired width for the SVG in vertical mode.
-        // And initialSvgHeight as desired height for horizontal mode.
-
-        // Let's simplify: svgWidth will always be parent.clientWidth.
-        // svgHeight will be fixed based on orientation, or a ratio of svgWidth.
-        // For this problem, fixed height for horizontal, and fixed width/larger height for vertical seems intended.
-
-        // Let's stick to the previous fixed dimensions but make them apply to the SVG directly,
-        // and then use the resize observer to adjust the SVG's actual 'width' and 'height' attributes,
-        // while the 'viewBox' maintains the internal coordinate system.
-
-        // Re-evaluating the initial fixed dimensions vs. responsiveness:
-        // The `w-full` on `#scale-container` means the SVG's parent will take full width.
-        // The SVG itself needs to fill that width and have an appropriate height.
-        // If `svgWidth.value` and `svgHeight.value` are updated by ResizeObserver,
-        // then `createCustomScale` should use these dynamic values.
-
-        // Initial dimensions for the SVG container, before any resize event
-        const parentWidth = svgRef.value.parentElement.clientWidth;
-        const parentHeight = props.orientation === 'horizontal' ? initialSvgHeight : initialSvgWidth; // Default height for vertical is initialSvgWidth (900)
-
-        svgWidth.value = parentWidth;
-        svgHeight.value = parentHeight;
-
+        svgHeight.value = svgRef.value.parentElement.clientHeight; // Now dynamically set by parent
         drawScale(); // Initial draw
     }
 });
@@ -426,6 +398,7 @@ watch(
         () => props.indicatorOpacity,
         () => props.confidenceColor,
         () => props.confidenceOpacity,
+        () => props.confidenceBoxCrossDimension, // Watch new prop
         () => props.transitionDuration
     ],
     () => {
@@ -463,12 +436,12 @@ svg {
     /* Ensures it takes up its own space */
     width: 100%;
     /* Make it fill its parent's width */
-    height: auto;
-    /* Allow height to adjust based on viewBox if not explicitly set */
+    height: 100%;
+    /* Make it fill its parent's height */
     background-color: #ffffff;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    margin-bottom: 2rem;
+    /* margin-bottom: 2rem; Removed as parent div handles spacing */
 }
 
 .tick line {
