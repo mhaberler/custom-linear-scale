@@ -291,24 +291,31 @@ function drawScale() {
         .each(function (d) {
             const g = d3.select(this);
             let tickLength;
+            let strokeColor = "#666"; // Default tick color
+            let textColor = "#333";   // Default text color
+            let textWeight = "normal"; // Default text weight
 
             if (majorTicks.includes(d)) {
                 tickLength = 20;
+                strokeColor = "#333"; // Darker for major
+                textWeight = "bold";  // Bold for major
                 g.classed("major-tick", true);
             } else if (halfTicks.includes(d)) {
                 tickLength = 10;
             } else if (smallTicks.includes(d)) {
                 tickLength = 5;
-            } else {
+            } else { // Minor ticks
                 tickLength = 15;
             }
 
-            // Append the tick line (extending downwards for horizontal, rightwards for vertical)
+            // Append the tick line with explicit stroke and stroke-width
             g.append("line")
                 .attr(props.orientation === 'horizontal' ? "x1" : "y1", 0)
                 .attr(props.orientation === 'horizontal' ? "y1" : "x1", 0)
                 .attr(props.orientation === 'horizontal' ? "x2" : "y2", 0)
-                .attr(props.orientation === 'horizontal' ? "y2" : "x2", tickLength);
+                .attr(props.orientation === 'horizontal' ? "y2" : "x2", tickLength)
+                .attr("stroke", strokeColor) // Explicit stroke color
+                .attr("stroke-width", majorTicks.includes(d) ? 2 : 1); // Thicker for major
 
             // Add text labels only for major ticks
             if (majorTicks.includes(d)) {
@@ -316,6 +323,8 @@ function drawScale() {
                     .attr(props.orientation === 'horizontal' ? "y" : "x", tickLength + tickTextOffset)
                     .attr(props.orientation === 'horizontal' ? "x" : "y", 0)
                     .attr("text-anchor", props.orientation === 'horizontal' ? "middle" : "start")
+                    .attr("fill", textColor)     // Explicit text color
+                    .style("font-weight", textWeight) // Explicit font weight
                     .text(d);
             }
         });
@@ -391,22 +400,26 @@ svg {
 }
 
 .tick line {
+    /* These are now mostly overridden by explicit D3 attributes, but kept for fallback/general styling */
     stroke: #666;
     stroke-width: 1px;
 }
 
 .tick text {
+    /* These are now mostly overridden by explicit D3 attributes, but kept for fallback/general styling */
     font-size: 14px;
     fill: #333;
     text-anchor: middle;
 }
 
 .major-tick line {
+    /* Kept for potential future use or if D3 attributes are removed */
     stroke: #333;
     stroke-width: 2px;
 }
 
 .major-tick text {
+    /* Kept for potential future use or if D3 attributes are removed */
     font-weight: 700;
 }
 
