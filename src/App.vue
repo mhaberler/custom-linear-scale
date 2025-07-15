@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'; // Import onMounted
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import LinearScale from './components/LinearScale.vue';
 
 // Reactive state for all configurable options
@@ -20,6 +20,10 @@ const percentOuter = ref(20);
 const simulationFrequency = ref(1);
 const isSimulationRunning = ref(false);
 
+// New reactive states for container dimensions
+const scaleContainerWidth = ref(900);
+const scaleContainerHeight = ref(200);
+
 let simulationInterval = null;
 
 // Function to check percentage sum and update error message
@@ -36,7 +40,7 @@ const checkPercentages = () => {
 };
 
 // Watch for changes in percentages to update the total sum display
-watch([percentCenter, percentMid, percentOuter], () => { // Removed immediate: true
+watch([percentCenter, percentMid, percentOuter], () => {
   checkPercentages();
 });
 
@@ -83,7 +87,10 @@ onUnmounted(() => {
   <div class="flex flex-col items-center justify-center min-h-screen bg-f0f4f8 text-333 p-4">
     <h1 class="text-3xl font-bold mb-6 text-gray-800">Custom Linear Scale</h1>
 
-    <div id="scale-container" class="w-full flex justify-center">
+    <!-- Scale container with dynamic width and height -->
+    <div id="scale-container"
+      class="flex justify-center items-center overflow-hidden bg-white rounded-xl shadow-md mb-8"
+      :style="{ width: scaleContainerWidth + 'px', height: scaleContainerHeight + 'px' }">
       <LinearScale :value="currentValue" :indicatorSize="indicatorSize" :indicatorColor="indicatorColor"
         :indicatorOpacity="indicatorOpacity" :indicatorDistancePercent="indicatorDistancePercent"
         :confidenceRangePercent="confidenceRangePercent" :confidenceOpacity="confidenceOpacity"
@@ -98,6 +105,22 @@ onUnmounted(() => {
         <input type="range" id="value-slider" min="-10" max="10" step="0.01" v-model.number="currentValue"
           :disabled="isSimulationRunning">
         <div class="text-gray-600">Current Value: <span id="current-value">{{ currentValue.toFixed(2) }}</span></div>
+      </div>
+
+      <div class="control-section">
+        <label class="text-lg font-medium text-gray-700">Scale Container Dimensions:</label>
+        <div class="flex flex-wrap justify-center gap-4">
+          <div class="flex flex-col items-center">
+            <label for="container-width" class="text-sm text-gray-600">Width (px):</label>
+            <input type="number" id="container-width" v-model.number="scaleContainerWidth" min="100" step="10"
+              :disabled="isSimulationRunning">
+          </div>
+          <div class="flex flex-col items-center">
+            <label for="container-height" class="text-sm text-gray-600">Height (px):</label>
+            <input type="number" id="container-height" v-model.number="scaleContainerHeight" min="100" step="10"
+              :disabled="isSimulationRunning">
+          </div>
+        </div>
       </div>
 
       <div class="control-section">
