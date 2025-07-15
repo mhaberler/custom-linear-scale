@@ -8,21 +8,7 @@ This project demonstrates a highly configurable linear scale visualization built
 
 ## Features
 
-* **Custom Non-Linear Scale:** The scale's range from -10 to 10 is distributed across three segments with configurable percentages:
-    * `[-1, 1]`
-    * `[1, 5]` and `[-5, -1]`
-    * `[5, 10]` and `[-10, -5]`
-* **Detailed Tick Marks:** Includes major, minor, half, and even smaller 0.1 interval tick marks.
-* **Dynamic Indicator:** A red triangle indicator points towards the scale, with configurable size, color, opacity, and distance from the scale.
-* **Confidence Range:** An opaque box centered on the indicator, representing a confidence range. Its width (along the scale), perpendicular dimension, opacity, and color are configurable.
-* **Orientation Toggle:** Switch between horizontal and vertical scale orientations.
-* **Configurable Padding:** Adjust the space at the ends of the scale.
-* **Smooth Transitions:** CSS transitions with configurable duration provide a dampened, visually appealing movement for dynamic elements.
-* **Simulation Mode:** A built-in simulation updates the indicator value and confidence range randomly at a configurable frequency (1-10 Hz).
-* **Responsive Design:** The scale component adapts to the size of its container, ensuring responsiveness.
-* **Vue 3 Component:** Encapsulated as a reusable Vue component.
-* **Vite & Tailwind CSS v4:** Modern development setup for fast development and sleek styling.
-
+see [Gemini-generated README](README_gemini.md) for details
 ## Usage example
 ````javascript
 <script setup>
