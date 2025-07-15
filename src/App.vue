@@ -17,6 +17,7 @@ const orientation = ref('horizontal');
 const scalePadding = ref(50);
 const simulationFrequency = ref(1);
 const isSimulationRunning = ref(false);
+const majorTickTextOffset = ref(15); // New prop state
 
 // Reactive states for container dimensions
 const scaleContainerWidth = ref(900);
@@ -150,7 +151,7 @@ onUnmounted(() => {
         :confidenceColor="confidenceColor" :confidenceBoxCrossDimension="confidenceBoxCrossDimension"
         :transitionDuration="transitionDuration" :orientation="orientation" :scalePadding="scalePadding"
         :majorTicks="parsedMajorTicks" :minorTicks="parsedMinorTicks" :intermediateTicks="parsedIntermediateTicks"
-        :weights="parsedWeights" />
+        :weights="parsedWeights" :majorTickTextOffset="majorTickTextOffset" />
     </div>
 
     <!-- Main controls container with responsive grid -->
@@ -293,6 +294,13 @@ onUnmounted(() => {
       <div class="control-section col-span-1">
         <label class="text-lg font-medium text-gray-700">Scale Padding (pixels):</label>
         <input type="number" id="scale-padding" v-model.number="scalePadding" min="0" step="10"
+          :disabled="isSimulationRunning">
+      </div>
+
+      <div class="control-section col-span-1">
+        <label for="major-tick-text-offset" class="text-lg font-medium text-gray-700">Major Tick Text Offset
+          (px):</label>
+        <input type="number" id="major-tick-text-offset" v-model.number="majorTickTextOffset" min="0" max="50" step="1"
           :disabled="isSimulationRunning">
       </div>
 

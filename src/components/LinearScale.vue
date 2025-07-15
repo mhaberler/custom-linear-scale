@@ -52,7 +52,6 @@ const props = defineProps({
         type: Number,
         default: 50
     },
-    // New props for scale configuration
     majorTicks: {
         type: Array,
         default: () => [-10, -5, -1, 0, 1, 5, 10],
@@ -75,6 +74,10 @@ const props = defineProps({
             const sum = arr.reduce((acc, val) => acc + val, 0);
             return arr.length === expectedLength && Math.abs(sum - 1.0) < 0.001; // Sum must be ~1
         }
+    },
+    majorTickTextOffset: { // New prop for configurable text offset
+        type: Number,
+        default: 15
     }
 });
 
@@ -230,7 +233,6 @@ function drawScale() {
     d3svg.selectAll("*").remove(); // Clear previous SVG content
 
     let scaleLinePos;
-    let tickTextOffset;
     let indicatorPoints;
 
     const indicatorSize = props.indicatorSize;
@@ -254,7 +256,6 @@ function drawScale() {
         const indicatorDistancePx = (indicatorDistancePercent / 100) * svgHeight.value;
         // Indicator points DOWN towards the scale line (from above)
         indicatorPoints = `0,${scaleLinePos - indicatorDistancePx + indicatorSize} -${indicatorSize / 2},${scaleLinePos - indicatorDistancePx} ${indicatorSize / 2},${scaleLinePos - indicatorDistancePx}`;
-        tickTextOffset = 15; // Below ticks
     } else { // vertical
         d3svg.attr("width", svgWidth.value)
             .attr("height", svgHeight.value)
@@ -266,7 +267,6 @@ function drawScale() {
         const indicatorDistancePx = (indicatorDistancePercent / 100) * svgWidth.value;
         // Indicator points LEFT towards the scale line (from right)
         indicatorPoints = `${scaleLinePos - indicatorDistancePx + indicatorSize},0 ${scaleLinePos - indicatorDistancePx}, -${indicatorSize / 2} ${scaleLinePos - indicatorDistancePx},${indicatorSize / 2}`;
-        tickTextOffset = 20; // To the right of ticks
     }
 
     console.log("Scale range after creation:", scale.range());
@@ -344,7 +344,7 @@ function drawScale() {
             // Add text labels only if showText is true (i.e., for major ticks)
             if (showText) {
                 g.append("text")
-                    .attr(props.orientation === 'horizontal' ? "y" : "x", tickLength + tickTextOffset)
+                    .attr(props.orientation === 'horizontal' ? "y" : "x", tickLength + props.majorTickTextOffset) // Use new prop here
                     .attr(props.orientation === 'horizontal' ? "text-anchor" : "dominant-baseline", props.orientation === 'horizontal' ? "middle" : "middle") // Vertically center for vertical ticks
                     .attr("fill", textColor)
                     .style("font-weight", textWeight)
@@ -429,7 +429,8 @@ watch(
         () => props.intermediateTicks,
         () => props.weights,
         () => props.indicatorSize,
-        () => props.indicatorDistancePercent
+        () => props.indicatorDistancePercent,
+        () => props.majorTickTextOffset // Watch the new prop
     ],
     () => {
         drawScale();
