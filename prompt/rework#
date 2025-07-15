@@ -1,0 +1,14 @@
+change the LinearScale props passing as follows:
+
+drop the concept of Domain breakpoints
+drop assumed symetric range distribution percentages
+all the tickmark business will be passed explicitely like so:
+
+- there is a array prop majorTicks which should be numbered, and bold - example: [-10,-5,-1,0,1,5,10]
+- there is an array prop minorTicks which are not numbered, and the only ones shown - example: [-0.9, -0.8. -0.7, -0.6, -0.4, -0.3, -0.2, -0.1, 0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8,0.9]
+- there is an array prop intermediateTicks  which are not numbered, and the only ones shown - example: [-0.5,0.5]
+
+- there are majorticks -1 ranges which drive the scaling
+- the weight of the ranges is an array prop - example: [0.2,0.2,0.4,0.4,0.2,0.2]
+
+

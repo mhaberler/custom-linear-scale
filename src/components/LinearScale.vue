@@ -52,21 +52,29 @@ const props = defineProps({
         type: Number,
         default: 50
     },
-    percentCenter: {
-        type: Number,
-        default: 40
-    },
-    percentMid: {
-        type: Number,
-        default: 40
-    },
-    percentOuter: {
-        type: Number,
-        default: 20
-    },
-    domainBreakpoints: { // New prop for domain breakpoints
+    // New props for scale configuration
+    majorTicks: {
         type: Array,
-        default: () => [-10, -5, -1, 0, 1, 5, 10]
+        default: () => [-10, -5, -1, 0, 1, 5, 10],
+        validator: (arr) => arr.length >= 2 && arr.every((val, i, a) => i === 0 || val >= a[i - 1]) // Must be sorted and have at least 2
+    },
+    minorTicks: {
+        type: Array,
+        default: () => [-0.9, -0.8, -0.7, -0.6, -0.4, -0.3, -0.2, -0.1, 0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]
+    },
+    intermediateTicks: {
+        type: Array,
+        default: () => [-0.5, 0.5]
+    },
+    weights: {
+        type: Array,
+        default: () => [0.1, 0.1, 0.3, 0.3, 0.1, 0.1], // Must sum to 1 and match majorTicks segments
+        validator: (arr, props) => {
+            if (props.majorTicks.length === 0) return true; // No major ticks, weights don't apply yet
+            const expectedLength = props.majorTicks.length - 1;
+            const sum = arr.reduce((acc, val) => acc + val, 0);
+            return arr.length === expectedLength && Math.abs(sum - 1.0) < 0.001; // Sum must be ~1
+        }
     }
 });
 
@@ -81,27 +89,23 @@ let scale; // D3 scale instance
 let resizeObserver; // To observe container resizing
 
 /**
- * Creates a custom piecewise linear scale function based on provided percentages.
- * This scale maps values from -10 to 10 onto a pixel range,
- * with specific segments occupying different proportions of the total width/height.
+ * Creates a custom piecewise linear scale function based on majorTicks and weights.
  * @param {number} totalDimension The total dimension of the SVG (width for horizontal, height for vertical).
- * @param {number[]} domainBreakpoints The array of domain values that define the segments (e.g., [-10, -5, -1, 0, 1, 5, 10]).
- * @param {number} p_center Percentage for the [-1, 1] range (e.g., 0.4 for 40%).
- * @param {number} p_mid Percentage for the [-5,-1] and [1,5] ranges (e.g., 0.4 for 40%).
- * @param {number} p_outer Percentage for the [-10,-5] and [5,10] ranges (e.g., 0.2 for 20%).
+ * @param {number[]} majorTicks The array of domain values that define the segments.
+ * @param {number[]} weights The array of proportional lengths for each segment.
  * @param {string} orientation 'horizontal' or 'vertical'.
  * @param {number} padding The padding in pixels at the ends of the scale.
  * @returns {function} A function that maps a domain value to a pixel position.
  */
-function createCustomScale(totalDimension, domainBreakpoints, p_center, p_mid, p_outer, orientation, padding) {
-    if (domainBreakpoints.length !== 7 || !domainBreakpoints.includes(0)) {
-        console.error("Invalid domainBreakpoints array. Expected [-10, -5, -1, 0, 1, 5, 10] or similar 7-point array including 0.");
-        // Fallback to a default linear scale or handle error gracefully
-        return d3.scaleLinear().domain([-10, 10]).range(orientation === 'horizontal' ? [padding, totalDimension - padding] : [totalDimension - padding, padding]);
+function createCustomScale(totalDimension, majorTicks, weights, orientation, padding) {
+    if (majorTicks.length < 2 || weights.length !== (majorTicks.length - 1)) {
+        console.error("Invalid majorTicks or weights array for custom scale creation.");
+        // Fallback to a simple linear scale if inputs are invalid
+        const defaultDomain = [-10, 10];
+        return d3.scaleLinear().domain(defaultDomain).range(orientation === 'horizontal' ? [padding, totalDimension - padding] : [totalDimension - padding, padding]);
     }
 
-    // Ensure breakpoints are sorted for correct segment calculation
-    const sortedBreakpoints = [...domainBreakpoints].sort((a, b) => a - b);
+    const sortedMajorTicks = [...majorTicks].sort((a, b) => a - b); // Ensure sorted
 
     let startPx, endPx, effectiveLength;
 
@@ -115,71 +119,45 @@ function createCustomScale(totalDimension, domainBreakpoints, p_center, p_mid, p
         effectiveLength = startPx - endPx;
     }
 
-    // Calculate pixel lengths for each segment based on percentages
-    // These percentages are applied to the defined segments based on the sorted breakpoints
-    const segmentPixelLengths = {
-        'center': p_center * effectiveLength, // For [-1, 1]
-        'mid': (p_mid / 2) * effectiveLength, // For [1,5] and [-5,-1]
-        'outer': (p_outer / 2) * effectiveLength // For [5,10] and [-10,-5]
-    };
-
     const rangePoints = {};
-    // Map domain breakpoints to pixel positions
-    // Assuming domainBreakpoints are ordered: [-10, -5, -1, 0, 1, 5, 10]
-    // Index mapping: 0: -10, 1: -5, 2: -1, 3: 0, 4: 1, 5: 5, 6: 10
+    let currentPixelPosition = startPx;
 
-    // Start point of the scale (corresponding to the smallest domain breakpoint)
-    rangePoints[sortedBreakpoints[0]] = orientation === 'horizontal' ? startPx : startPx;
+    // Set the first range point
+    rangePoints[sortedMajorTicks[0]] = currentPixelPosition;
 
-    // Calculate pixel positions sequentially
-    rangePoints[sortedBreakpoints[1]] = orientation === 'horizontal' ?
-        rangePoints[sortedBreakpoints[0]] + segmentPixelLengths.outer :
-        rangePoints[sortedBreakpoints[0]] - segmentPixelLengths.outer;
-
-    rangePoints[sortedBreakpoints[2]] = orientation === 'horizontal' ?
-        rangePoints[sortedBreakpoints[1]] + segmentPixelLengths.mid :
-        rangePoints[sortedBreakpoints[1]] - segmentPixelLengths.mid;
-
-    rangePoints[sortedBreakpoints[3]] = orientation === 'horizontal' ?
-        rangePoints[sortedBreakpoints[2]] + (segmentPixelLengths.center / 2) :
-        rangePoints[sortedBreakpoints[2]] - (segmentPixelLengths.center / 2);
-
-    rangePoints[sortedBreakpoints[4]] = orientation === 'horizontal' ?
-        rangePoints[sortedBreakpoints[3]] + (segmentPixelLengths.center / 2) :
-        rangePoints[sortedBreakpoints[3]] - (segmentPixelLengths.center / 2);
-
-    rangePoints[sortedBreakpoints[5]] = orientation === 'horizontal' ?
-        rangePoints[sortedBreakpoints[4]] + segmentPixelLengths.mid :
-        rangePoints[sortedBreakpoints[4]] - segmentPixelLengths.mid;
-
-    rangePoints[sortedBreakpoints[6]] = orientation === 'horizontal' ?
-        rangePoints[sortedBreakpoints[5]] + segmentPixelLengths.outer :
-        rangePoints[sortedBreakpoints[5]] - segmentPixelLengths.outer;
-
+    // Calculate pixel positions for each major tick based on weights
+    for (let i = 0; i < sortedMajorTicks.length - 1; i++) {
+        const segmentLengthPx = weights[i] * effectiveLength;
+        if (orientation === 'horizontal') {
+            currentPixelPosition += segmentLengthPx;
+        } else { // vertical
+            currentPixelPosition -= segmentLengthPx; // Decrement for vertical scale (top is smaller pixel)
+        }
+        rangePoints[sortedMajorTicks[i + 1]] = currentPixelPosition;
+    }
 
     const customScale = (value) => {
-        if (value >= 0) {
-            if (value <= sortedBreakpoints[4]) { // value <= 1
-                return d3.scaleLinear().domain([sortedBreakpoints[3], sortedBreakpoints[4]]).range([rangePoints[sortedBreakpoints[3]], rangePoints[sortedBreakpoints[4]]])(value);
-            } else if (value <= sortedBreakpoints[5]) { // value <= 5
-                return d3.scaleLinear().domain([sortedBreakpoints[4], sortedBreakpoints[5]]).range([rangePoints[sortedBreakpoints[4]], rangePoints[sortedBreakpoints[5]]])(value);
-            } else if (value <= sortedBreakpoints[6]) { // value <= 10
-                return d3.scaleLinear().domain([sortedBreakpoints[5], sortedBreakpoints[6]]).range([rangePoints[sortedBreakpoints[5]], rangePoints[sortedBreakpoints[6]]])(value);
-            }
-        } else { // value < 0
-            if (value >= sortedBreakpoints[2]) { // value >= -1
-                return d3.scaleLinear().domain([sortedBreakpoints[2], sortedBreakpoints[3]]).range([rangePoints[sortedBreakpoints[2]], rangePoints[sortedBreakpoints[3]]])(value);
-            } else if (value >= sortedBreakpoints[1]) { // value >= -5
-                return d3.scaleLinear().domain([sortedBreakpoints[1], sortedBreakpoints[2]]).range([rangePoints[sortedBreakpoints[1]], rangePoints[sortedBreakpoints[2]]])(value);
-            } else if (value >= sortedBreakpoints[0]) { // value >= -10
-                return d3.scaleLinear().domain([sortedBreakpoints[0], sortedBreakpoints[1]]).range([rangePoints[sortedBreakpoints[0]], rangePoints[sortedBreakpoints[1]]])(value);
+        // Find the correct segment for the given value
+        for (let i = 0; i < sortedMajorTicks.length - 1; i++) {
+            const domainStart = sortedMajorTicks[i];
+            const domainEnd = sortedMajorTicks[i + 1];
+            const rangeStart = rangePoints[domainStart];
+            const rangeEnd = rangePoints[domainEnd];
+
+            if ((value >= domainStart && value <= domainEnd) || (value <= domainStart && value >= domainEnd)) {
+                return d3.scaleLinear().domain([domainStart, domainEnd]).range([rangeStart, rangeEnd])(value);
             }
         }
-        return rangePoints[sortedBreakpoints[3]]; // Fallback for 0
+        // Fallback if value is outside the defined majorTicks range
+        const firstMajorTick = sortedMajorTicks[0];
+        const lastMajorTick = sortedMajorTicks[sortedMajorTicks.length - 1];
+        const firstRangePoint = rangePoints[firstMajorTick];
+        const lastRangePoint = rangePoints[lastMajorTick];
+        return d3.scaleLinear().domain([firstMajorTick, lastMajorTick]).range([firstRangePoint, lastRangePoint])(value);
     };
 
-    customScale.domain = () => [sortedBreakpoints[0], sortedBreakpoints[6]]; // Overall domain
-    customScale.range = () => (orientation === 'horizontal' ? [rangePoints[sortedBreakpoints[0]], rangePoints[sortedBreakpoints[6]]] : [rangePoints[sortedBreakpoints[6]], rangePoints[sortedBreakpoints[0]]]);
+    customScale.domain = () => [sortedMajorTicks[0], sortedMajorTicks[sortedMajorTicks.length - 1]];
+    customScale.range = () => (orientation === 'horizontal' ? [rangePoints[sortedMajorTicks[0]], rangePoints[sortedMajorTicks[sortedMajorTicks.length - 1]]] : [rangePoints[sortedMajorTicks[sortedMajorTicks.length - 1]], rangePoints[sortedMajorTicks[0]]]);
     customScale.effectiveLength = effectiveLength;
     return customScale;
 }
@@ -242,10 +220,11 @@ function drawScale() {
 
     console.log("Drawing scale. Orientation:", props.orientation);
     console.log("Current Padding:", props.scalePadding);
-    console.log("Percentages:", props.percentCenter, props.percentMid, props.percentOuter);
     console.log("SVG Dimensions:", svgWidth.value, svgHeight.value);
-    console.log("Domain Breakpoints:", props.domainBreakpoints);
-
+    console.log("Major Ticks:", props.majorTicks);
+    console.log("Minor Ticks:", props.minorTicks);
+    console.log("Intermediate Ticks:", props.intermediateTicks);
+    console.log("Weights:", props.weights);
 
     const d3svg = d3.select(svgRef.value);
     d3svg.selectAll("*").remove(); // Clear previous SVG content
@@ -268,7 +247,7 @@ function drawScale() {
         d3svg.attr("width", svgWidth.value)
             .attr("height", svgHeight.value)
             .attr("viewBox", `0 0 ${svgWidth.value} ${svgHeight.value}`);
-        scale = createCustomScale(svgWidth.value, props.domainBreakpoints, props.percentCenter / 100, props.percentMid / 100, props.percentOuter / 100, props.orientation, props.scalePadding);
+        scale = createCustomScale(svgWidth.value, props.majorTicks, props.weights, props.orientation, props.scalePadding);
         scaleLinePos = svgHeight.value / 2; // Center vertically using dynamic height
 
         // Calculate indicator position based on distance percentage of current SVG height
@@ -280,7 +259,7 @@ function drawScale() {
         d3svg.attr("width", svgWidth.value)
             .attr("height", svgHeight.value)
             .attr("viewBox", `0 0 ${svgWidth.value} ${svgHeight.value}`);
-        scale = createCustomScale(svgHeight.value, props.domainBreakpoints, props.percentCenter / 100, props.percentMid / 100, props.percentOuter / 100, props.orientation, props.scalePadding);
+        scale = createCustomScale(svgHeight.value, props.majorTicks, props.weights, props.orientation, props.scalePadding);
         scaleLinePos = svgWidth.value / 2; // Center horizontally using dynamic width
 
         // Calculate indicator position based on distance percentage of current SVG width
@@ -292,49 +271,24 @@ function drawScale() {
 
     console.log("Scale range after creation:", scale.range());
 
-    // Define tick mark values
-    const majorTicks = props.domainBreakpoints; // Major ticks are the provided breakpoints
-    const minorTicks = []; // For integer ticks outside [-1,1]
-    const halfTicks = []; // For 0.5 and -0.5
-    const smallTicks = []; // For 0.1 increments within [-1,1]
+    // Draw the main scale line
+    d3svg.append("line")
+        .attr("class", "scale-line")
+        .attr(props.orientation === 'horizontal' ? "x1" : "y1", scale.range()[0])
+        .attr(props.orientation === 'horizontal' ? "y1" : "x1", scaleLinePos)
+        .attr(props.orientation === 'horizontal' ? "x2" : "y2", scale.range()[1])
+        .attr(props.orientation === 'horizontal' ? "y2" : "x2", scaleLinePos)
+        .attr("stroke", "#333")
+        .attr("stroke-width", 2);
 
-    // Identify the [-1, 1] range from sorted breakpoints
-    const zeroIndex = majorTicks.indexOf(0);
-    const negOne = majorTicks[zeroIndex - 1]; // Should be -1
-    const posOne = majorTicks[zeroIndex + 1]; // Should be 1
+    // Combine all tick values, ensuring uniqueness and sorting for consistent rendering
+    const allTickValues = [...new Set([
+        ...props.majorTicks,
+        ...props.minorTicks,
+        ...props.intermediateTicks
+    ])].sort((a, b) => a - b);
 
-    // Generate minor, half, and small ticks ONLY within the [-1, 1] range
-    if (negOne !== undefined && posOne !== undefined) {
-        d3.range(negOne, posOne + 0.1, 0.1).forEach(d => {
-            const val = parseFloat(d.toFixed(2));
-            // Only add if it's not a major tick (which are already handled)
-            if (!majorTicks.includes(val)) {
-                if (val % 0.5 === 0 && val !== 0) { // Half ticks (e.g., -0.5, 0.5)
-                    halfTicks.push(val);
-                } else if (val % 1 === 0) { // Integer values within [-1,1] that are not major ticks (e.g., none if -1 and 1 are major)
-                    // This condition might not add anything if -1 and 1 are always major ticks
-                    // but it's kept for robustness if domainBreakpoints change
-                    minorTicks.push(val); // Could be used for integer ticks within this range if needed
-                } else { // Small ticks (0.1 increments, excluding half/major)
-                    smallTicks.push(val);
-                }
-            }
-        });
-    }
-
-    // Generate integer ticks for other ranges (outside [-1, 1])
-    const minDomain = majorTicks[0];
-    const maxDomain = majorTicks[majorTicks.length - 1];
-
-    d3.range(minDomain, maxDomain + 1, 1).forEach(d => { // Iterate through all integers in the full domain
-        if (!majorTicks.includes(d) && (d < negOne || d > posOne)) { // If it's an integer, not a major tick, AND outside [-1,1]
-            minorTicks.push(d);
-        }
-    });
-
-
-    const allTickValues = [...majorTicks, ...minorTicks, ...halfTicks, ...smallTicks].sort((a, b) => a - b);
-    console.log("All tick values:", allTickValues);
+    console.log("All tick values for rendering:", allTickValues);
 
     // Create a group for each tick mark
     d3svg.selectAll(".tick")
@@ -344,7 +298,6 @@ function drawScale() {
         .attr("class", "tick")
         .attr("transform", d => {
             const pos = scale(d);
-            console.log(`Tick value: ${d}, Scaled position: ${pos}`);
             return props.orientation === 'horizontal' ?
                 `translate(${pos}, ${scaleLinePos})` :
                 `translate(${scaleLinePos}, ${pos})`;
@@ -355,18 +308,28 @@ function drawScale() {
             let strokeColor = "#666";
             let textColor = "#333";
             let textWeight = "normal";
+            let showText = false;
 
-            if (majorTicks.includes(d)) {
+            if (props.majorTicks.includes(d)) {
                 tickLength = 20;
                 strokeColor = "#333";
                 textWeight = "bold";
+                showText = true;
                 g.classed("major-tick", true);
-            } else if (halfTicks.includes(d)) { // -0.5, 0.5
+            } else if (props.intermediateTicks.includes(d)) {
                 tickLength = 10;
-            } else if (smallTicks.includes(d)) { // 0.1 increments in [-1,1]
+                strokeColor = "#666";
+                textWeight = "normal";
+            } else if (props.minorTicks.includes(d)) {
                 tickLength = 5;
-            } else if (minorTicks.includes(d)) { // Integer ticks outside [-1,1]
-                tickLength = 15;
+                strokeColor = "#666";
+                textWeight = "normal";
+            } else {
+                // Fallback for any other numbers that might sneak in, though ideally
+                // all tick values are explicitly defined in the props arrays
+                tickLength = 5;
+                strokeColor = "#ccc";
+                textWeight = "normal";
             }
 
             // Append the tick line with explicit stroke and stroke-width
@@ -376,13 +339,13 @@ function drawScale() {
                 .attr(props.orientation === 'horizontal' ? "x2" : "y2", 0)
                 .attr(props.orientation === 'horizontal' ? "y2" : "x2", tickLength)
                 .attr("stroke", strokeColor)
-                .attr("stroke-width", majorTicks.includes(d) ? 2 : 1);
+                .attr("stroke-width", showText ? 2 : 1); // Thicker for major ticks
 
-            // Add text labels only for major ticks
-            if (majorTicks.includes(d)) {
+            // Add text labels only if showText is true (i.e., for major ticks)
+            if (showText) {
                 g.append("text")
                     .attr(props.orientation === 'horizontal' ? "y" : "x", tickLength + tickTextOffset)
-                    .attr("text-anchor", props.orientation === 'horizontal' ? "middle" : "start")
+                    .attr(props.orientation === 'horizontal' ? "text-anchor" : "dominant-baseline", props.orientation === 'horizontal' ? "middle" : "middle") // Vertically center for vertical ticks
                     .attr("fill", textColor)
                     .style("font-weight", textWeight)
                     .text(d);
@@ -461,17 +424,17 @@ watch(
     [
         () => props.orientation,
         () => props.scalePadding,
-        () => props.percentCenter,
-        () => props.percentMid,
-        () => props.percentOuter,
+        () => props.majorTicks, // Watch new props
+        () => props.minorTicks,
+        () => props.intermediateTicks,
+        () => props.weights,
         () => props.indicatorSize,
-        () => props.indicatorDistancePercent,
-        () => props.domainBreakpoints // Watch the new prop
+        () => props.indicatorDistancePercent
     ],
     () => {
         drawScale();
     },
-    { deep: true } // Use deep watch for array prop
+    { deep: true } // Use deep watch for array props
 );
 </script>
 
@@ -516,5 +479,11 @@ svg {
 
 .confidence-box {
     border-radius: 4px;
+}
+
+/* New style for the main scale line */
+.scale-line {
+    stroke: #333;
+    stroke-width: 2px;
 }
 </style>

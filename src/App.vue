@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue'; // Added computed
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import LinearScale from './components/LinearScale.vue';
 
 // Reactive state for all configurable options
@@ -15,73 +15,84 @@ const confidenceBoxCrossDimension = ref(20);
 const transitionDuration = ref(0.3);
 const orientation = ref('horizontal');
 const scalePadding = ref(50);
-const percentCenter = ref(40);
-const percentMid = ref(40);
-const percentOuter = ref(20);
 const simulationFrequency = ref(1);
 const isSimulationRunning = ref(false);
 
-// New reactive states for container dimensions
+// Reactive states for container dimensions
 const scaleContainerWidth = ref(900);
 const scaleContainerHeight = ref(200);
 
-// New reactive state for domain breakpoints
-const domainBreakpointsInput = ref('-10, -5, -1, 0, 1, 5, 10');
-const domainBreakpointsError = ref(false);
+// New reactive states for scale configuration arrays
+const majorTicksInput = ref('-10,-5,-1,0,1,5,10');
+const minorTicksInput = ref('-0.9,-0.8,-0.7,-0.6,-0.4,-0.3,-0.2,-0.1,0.1,0.2,0.3,0.4,0.6,0.7,0.8,0.9');
+const intermediateTicksInput = ref('-0.5,0.5');
+const weightsInput = ref('0.1,0.1,0.3,0.3,0.1,0.1');
+
+// Error flags for input parsing
+const majorTicksError = ref(false);
+const minorTicksError = ref(false);
+const intermediateTicksError = ref(false);
+const weightsError = ref(false);
+const weightsSumError = ref(false);
 
 let simulationInterval = null;
 
-// Computed property to parse the domain breakpoints input
-const parsedDomainBreakpoints = computed(() => {
+// Helper function to parse comma-separated numbers
+const parseNumberArray = (input, errorRef) => {
   try {
-    const parsed = domainBreakpointsInput.value
-      .split(',')
-      .map(s => parseFloat(s.trim()))
-      .filter(n => !isNaN(n))
-      .sort((a, b) => a - b); // Ensure they are sorted
-
-    // Basic validation: must have at least 2 points and 0 must be included for current logic
-    if (parsed.length < 2 || !parsed.includes(0)) {
-      domainBreakpointsError.value = true;
-      return []; // Return empty or a default invalid state
-    }
-    domainBreakpointsError.value = false;
+    const parsed = input.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+    errorRef.value = false;
     return parsed;
   } catch (e) {
-    domainBreakpointsError.value = true;
+    errorRef.value = true;
     return [];
-  }
-});
-
-
-// Function to check percentage sum and update error message
-const checkPercentages = () => {
-  const total = percentCenter.value + percentMid.value + percentOuter.value;
-  const errorElement = document.getElementById('percentage-error');
-  if (errorElement) { // Ensure element exists before accessing classList
-    if (total !== 100) {
-      errorElement.classList.remove('hidden');
-    } else {
-      errorElement.classList.add('hidden');
-    }
   }
 };
 
-// Watch for changes in percentages to update the total sum display
-watch([percentCenter, percentMid, percentOuter], () => {
-  checkPercentages();
+// Computed properties for parsed and validated arrays
+const parsedMajorTicks = computed(() => {
+  const parsed = parseNumberArray(majorTicksInput.value, majorTicksError);
+  // Basic validation: Must have at least 2 points and be sorted
+  if (parsed.length < 2 || !parsed.every((val, i, arr) => i === 0 || val >= arr[i - 1])) {
+    majorTicksError.value = true;
+    return [];
+  }
+  return parsed;
 });
 
-// Watch for changes in domain breakpoints input to trigger re-render
-watch(domainBreakpointsInput, () => {
-  // This will trigger the LinearScale component to re-draw via its prop watch
+const parsedMinorTicks = computed(() => parseNumberArray(minorTicksInput.value, minorTicksError));
+const parsedIntermediateTicks = computed(() => parseNumberArray(intermediateTicksInput.value, intermediateTicksError));
+
+const parsedWeights = computed(() => {
+  const parsed = parseNumberArray(weightsInput.value, weightsError);
+  // Validate weights length and sum
+  if (parsedMajorTicks.value.length > 0 && parsed.length !== (parsedMajorTicks.value.length - 1)) {
+    weightsError.value = true;
+    return [];
+  }
+  const sum = parsed.reduce((acc, val) => acc + val, 0);
+  // Check if sum is close to 1 (allowing for floating point inaccuracies)
+  if (Math.abs(sum - 1.0) > 0.001) {
+    weightsSumError.value = true;
+  } else {
+    weightsSumError.value = false;
+  }
+  return parsed;
 });
 
-
-// Perform initial check after component is mounted
-onMounted(() => {
-  checkPercentages();
+// Watch for changes in input fields to trigger re-parsing and re-render
+watch([majorTicksInput, minorTicksInput, intermediateTicksInput, weightsInput], () => {
+  // Computed properties will automatically re-evaluate, triggering LinearScale re-render
 });
+
+// Update simulation range based on major ticks
+watch(parsedMajorTicks, (newVal) => {
+  if (isSimulationRunning.value) {
+    stopSimulation();
+    startSimulation(); // Restart simulation with new range
+  }
+});
+
 
 const toggleSimulation = () => {
   isSimulationRunning.value = !isSimulationRunning.value;
@@ -99,8 +110,7 @@ const startSimulation = () => {
   const intervalMs = 1000 / frequency;
 
   simulationInterval = setInterval(() => {
-    // Generate random value within the parsed domain breakpoints
-    const domain = parsedDomainBreakpoints.value;
+    const domain = parsedMajorTicks.value;
     if (domain.length > 1) {
       const minVal = domain[0];
       const maxVal = domain[domain.length - 1];
@@ -139,20 +149,23 @@ onUnmounted(() => {
         :confidenceRangePercent="confidenceRangePercent" :confidenceOpacity="confidenceOpacity"
         :confidenceColor="confidenceColor" :confidenceBoxCrossDimension="confidenceBoxCrossDimension"
         :transitionDuration="transitionDuration" :orientation="orientation" :scalePadding="scalePadding"
-        :percentCenter="percentCenter" :percentMid="percentMid" :percentOuter="percentOuter"
-        :domainBreakpoints="parsedDomainBreakpoints" />
+        :majorTicks="parsedMajorTicks" :minorTicks="parsedMinorTicks" :intermediateTicks="parsedIntermediateTicks"
+        :weights="parsedWeights" />
     </div>
 
-    <div class="controls-container mt-8">
-      <div class="control-section">
+    <!-- Main controls container with responsive grid -->
+    <div class="controls-container mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-4xl">
+      <!-- Value Slider - Full width -->
+      <div class="control-section col-span-full">
         <label for="value-slider" class="text-lg font-medium text-gray-700">Adjust Indicator Value:</label>
-        <input type="range" id="value-slider" :min="parsedDomainBreakpoints[0] || -10"
-          :max="parsedDomainBreakpoints[parsedDomainBreakpoints.length - 1] || 10" step="0.01"
-          v-model.number="currentValue" :disabled="isSimulationRunning">
+        <input type="range" id="value-slider" :min="parsedMajorTicks[0] || -10"
+          :max="parsedMajorTicks[parsedMajorTicks.length - 1] || 10" step="0.01" v-model.number="currentValue"
+          :disabled="isSimulationRunning">
         <div class="text-gray-600">Current Value: <span id="current-value">{{ currentValue.toFixed(2) }}</span></div>
       </div>
 
-      <div class="control-section">
+      <!-- Scale Container Dimensions - Single column -->
+      <div class="control-section col-span-1">
         <label class="text-lg font-medium text-gray-700">Scale Container Dimensions:</label>
         <div class="flex flex-wrap justify-center gap-4">
           <div class="flex flex-col items-center">
@@ -168,15 +181,41 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="control-section">
-        <label class="text-lg font-medium text-gray-700">Domain Breakpoints (comma-separated):</label>
-        <input type="text" id="domain-breakpoints" v-model="domainBreakpointsInput" class="w-full p-2 border rounded-md"
-          :class="{ 'border-red-500': domainBreakpointsError }" :disabled="isSimulationRunning">
-        <p v-if="domainBreakpointsError" class="text-red-600 text-sm mt-1">Invalid format or missing 0. Must be
-          comma-separated numbers, e.g., -10, -5, -1, 0, 1, 5, 10</p>
+      <!-- Tick and Weight Inputs - Each in its own column -->
+      <div class="control-section col-span-1">
+        <label class="text-lg font-medium text-gray-700">Major Ticks (comma-separated, sorted):</label>
+        <input type="text" id="major-ticks" v-model="majorTicksInput" class="w-full p-2 border rounded-md"
+          :class="{ 'border-red-500': majorTicksError }" :disabled="isSimulationRunning">
+        <p v-if="majorTicksError" class="text-red-600 text-sm mt-1">Invalid format. Must be comma-separated numbers,
+          sorted, and have at least 2 points.</p>
       </div>
 
-      <div class="control-section">
+      <div class="control-section col-span-1">
+        <label class="text-lg font-medium text-gray-700">Minor Ticks (comma-separated):</label>
+        <input type="text" id="minor-ticks" v-model="minorTicksInput" class="w-full p-2 border rounded-md"
+          :class="{ 'border-red-500': minorTicksError }" :disabled="isSimulationRunning">
+        <p v-if="minorTicksError" class="text-red-600 text-sm mt-1">Invalid format. Must be comma-separated numbers.</p>
+      </div>
+
+      <div class="control-section col-span-1">
+        <label class="text-lg font-medium text-gray-700">Intermediate Ticks (comma-separated):</label>
+        <input type="text" id="intermediate-ticks" v-model="intermediateTicksInput" class="w-full p-2 border rounded-md"
+          :class="{ 'border-red-500': intermediateTicksError }" :disabled="isSimulationRunning">
+        <p v-if="intermediateTicksError" class="text-red-600 text-sm mt-1">Invalid format. Must be comma-separated
+          numbers.</p>
+      </div>
+
+      <div class="control-section col-span-1">
+        <label class="text-lg font-medium text-gray-700">Segment Weights (comma-separated, sum to 1):</label>
+        <input type="text" id="weights" v-model="weightsInput" class="w-full p-2 border rounded-md"
+          :class="{ 'border-red-500': weightsError || weightsSumError }" :disabled="isSimulationRunning">
+        <p v-if="weightsError" class="text-red-600 text-sm mt-1">Invalid format or incorrect number of weights. Must
+          match (major ticks count - 1).</p>
+        <p v-if="weightsSumError" class="text-red-600 text-sm mt-1">Weights must sum to approximately 1.0.</p>
+      </div>
+
+      <!-- Indicator Settings - Full width on small, half on medium, one-third on large -->
+      <div class="control-section col-span-full md:col-span-2 lg:col-span-1">
         <label class="text-lg font-medium text-gray-700">Indicator Settings:</label>
         <div class="flex flex-wrap justify-center gap-4">
           <div class="flex flex-col items-center">
@@ -201,7 +240,8 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="control-section">
+      <!-- Confidence Box Settings - Full width on small, half on medium, one-third on large -->
+      <div class="control-section col-span-full md:col-span-2 lg:col-span-1">
         <label class="text-lg font-medium text-gray-700">Confidence Box Settings:</label>
         <div class="flex flex-wrap justify-center gap-4">
           <div class="flex flex-col items-center">
@@ -226,7 +266,8 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="control-section">
+      <!-- Other Controls - Each in its own column -->
+      <div class="control-section col-span-1">
         <label for="transition-duration" class="text-lg font-medium text-gray-700">Transition Duration
           (seconds):</label>
         <input type="range" id="transition-duration" v-model.number="transitionDuration" min="0" max="2" step="0.05"
@@ -235,7 +276,7 @@ onUnmounted(() => {
             }}</span> s</div>
       </div>
 
-      <div class="control-section">
+      <div class="control-section col-span-1">
         <label class="text-lg font-medium text-gray-700">Orientation:</label>
         <div class="flex gap-4">
           <label class="flex items-center">
@@ -249,38 +290,19 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="control-section">
+      <div class="control-section col-span-1">
         <label class="text-lg font-medium text-gray-700">Scale Padding (pixels):</label>
         <input type="number" id="scale-padding" v-model.number="scalePadding" min="0" step="10"
           :disabled="isSimulationRunning">
       </div>
 
-      <div class="control-section">
-        <label class="text-lg font-medium text-gray-700">Range Distribution Percentages:</label>
-        <div class="flex flex-wrap justify-center gap-4">
-          <div class="flex flex-col items-center">
-            <label for="percent-center" class="text-sm text-gray-600">[-1, 1] %:</label>
-            <input type="number" id="percent-center" v-model.number="percentCenter" min="0" max="100"
-              :disabled="isSimulationRunning">
-          </div>
-          <div class="flex flex-col items-center">
-            <label for="percent-mid" class="text-sm text-gray-600">[-5,-1] & [1,5] %:</label>
-            <input type="number" id="percent-mid" v-model.number="percentMid" min="0" max="100"
-              :disabled="isSimulationRunning">
-          </div>
-          <div class="flex flex-col items-center">
-            <label for="percent-outer" class="text-sm text-gray-600">[-10,-5] & [5,10] %:</label>
-            <input type="number" id="percent-outer" v-model.number="percentOuter" min="0" max="100"
-              :disabled="isSimulationRunning">
-          </div>
-        </div>
-        <p id="percentage-error" class="text-red-600 text-sm mt-2 hidden">Percentages must sum to 100%!</p>
+      <!-- Action Buttons - Full width -->
+      <div class="control-section col-span-full flex flex-col items-center">
+        <button @click="stopSimulation();" class="action-button update-button" :disabled="isSimulationRunning">Update
+          Scale</button>
       </div>
 
-      <button @click="stopSimulation();" class="action-button update-button" :disabled="isSimulationRunning">Update
-        Scale</button>
-
-      <div class="control-section">
+      <div class="control-section col-span-full flex flex-col items-center">
         <label for="simulation-frequency" class="text-lg font-medium text-gray-700">Simulation Frequency (Hz):</label>
         <input type="range" id="simulation-frequency" v-model.number="simulationFrequency" min="1" max="10" step="1">
         <div class="text-gray-600">Current Frequency: <span id="current-frequency">{{ simulationFrequency }}</span> Hz
@@ -297,27 +319,28 @@ onUnmounted(() => {
 <style scoped>
 /* Scoped styles for App.vue, mostly for the controls container */
 .controls-container {
-  width: 90%;
-  /* Responsive width */
-  max-width: 700px;
-  /* Maximum width */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  /* Space between sections */
+  /* Removed flex-direction: column and gap from here */
   padding: 1.5rem;
   background-color: #ffffff;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Tailwind grid classes now define the primary layout */
 }
 
 .control-section {
   width: 100%;
+  /* Ensure sections take full width of their grid column */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
+  padding: 0.75rem;
+  /* Add some padding to each section for visual separation */
+  border: 1px solid #e5e7eb;
+  /* Light border for visual grouping */
+  border-radius: 8px;
+  background-color: #f9fafb;
+  /* Slightly different background for sections */
 }
 
 input[type="range"] {
