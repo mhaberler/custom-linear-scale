@@ -4,30 +4,30 @@ import LinearScale from './components/LinearScale.vue';
 
 // Reactive state for all configurable options
 const currentValue = ref(0);
-const indicatorSize = ref(20);
+const indicatorSize = ref(30);
 const indicatorColor = ref('#ef4444');
 const indicatorOpacity = ref(1.0);
-const indicatorDistancePercent = ref(5);
+const indicatorDistancePercent = ref(18);
 const confidenceRangePercent = ref(5);
 const confidenceOpacity = ref(0.6);
 const confidenceColor = ref('#a7f3d0');
 const confidenceBoxCrossDimension = ref(20);
-const transitionDuration = ref(0.3);
-const orientation = ref('horizontal');
+const transitionDuration = ref(0.95);
+const orientation = ref('vertical');
 const scalePadding = ref(50);
 const simulationFrequency = ref(1);
 const isSimulationRunning = ref(false);
-const majorTickTextOffset = ref(15); // New prop state
+const majorTickTextOffset = ref(18); // New prop state
 
 // Reactive states for container dimensions
-const scaleContainerWidth = ref(900);
-const scaleContainerHeight = ref(200);
+const scaleContainerWidth = ref(200);
+const scaleContainerHeight = ref(500);
 
 // New reactive states for scale configuration arrays
 const majorTicksInput = ref('-10,-5,-1,0,1,5,10');
-const minorTicksInput = ref('-0.9,-0.8,-0.7,-0.6,-0.4,-0.3,-0.2,-0.1,0.1,0.2,0.3,0.4,0.6,0.7,0.8,0.9');
+const minorTicksInput = ref('-9,-8,-7,-6,-4,-3,-2,-0.9,-0.8,-0.7,-0.6,-0.4,-0.3,-0.2,-0.1,0.1,0.2,0.3,0.4,0.6,0.7,0.8,0.9,2,3,4,6,7,8,9');
 const intermediateTicksInput = ref('-0.5,0.5');
-const weightsInput = ref('0.1,0.1,0.3,0.3,0.1,0.1');
+const weightsInput = ref('0.08,0.12,0.3,0.3,0.12,0.08');
 
 // Error flags for input parsing
 const majorTicksError = ref(false);
