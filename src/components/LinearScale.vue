@@ -1,6 +1,6 @@
 <script setup>
 import * as d3 from 'd3';
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, watch, onUnmounted } from 'vue'; // Added onUnmounted
 
 // Define props for all configurable aspects of the scale
 const props = defineProps({
@@ -65,18 +65,18 @@ const props = defineProps({
 // Ref for the SVG element, allowing D3 to select it
 const svgRef = ref(null);
 
-// Define fixed SVG dimensions
-const initialSvgWidth = 900;
-const initialSvgHeight = 200;
-const verticalScaleWidth = 300; // Wider SVG for vertical orientation
+// Reactive dimensions for the SVG, will be updated by ResizeObserver
+const svgWidth = ref(900);
+const svgHeight = ref(200);
 
 let scale; // D3 scale instance
+let resizeObserver; // To observe container resizing
 
 /**
  * Creates a custom piecewise linear scale function based on provided percentages.
  * This scale maps values from -10 to 10 onto a pixel range,
  * with specific segments occupying different proportions of the total width/height.
- * @param {number} totalSvgDimension The total dimension of the SVG (width for horizontal, height for vertical).
+ * @param {number} totalDimension The total dimension of the SVG (width for horizontal, height for vertical).
  * @param {number} p_center Percentage for the [-1, 1] range (e.g., 0.4 for 40%).
  * @param {number} p_mid Percentage for the [-5,-1] and [1,5] ranges (e.g., 0.4 for 40%).
  * @param {number} p_outer Percentage for the [-10,-5] and [5,10] ranges (e.g., 0.2 for 20%).
@@ -84,15 +84,15 @@ let scale; // D3 scale instance
  * @param {number} padding The padding in pixels at the ends of the scale.
  * @returns {function} A function that maps a domain value to a pixel position.
  */
-function createCustomScale(totalSvgDimension, p_center, p_mid, p_outer, orientation, padding) {
+function createCustomScale(totalDimension, p_center, p_mid, p_outer, orientation, padding) {
     let startPx, endPx, effectiveLength;
 
     if (orientation === 'horizontal') {
         startPx = padding;
-        endPx = totalSvgDimension - padding;
+        endPx = totalDimension - padding;
         effectiveLength = endPx - startPx;
     } else { // vertical
-        startPx = totalSvgDimension - padding; // Scale starts from bottom (higher pixel value)
+        startPx = totalDimension - padding; // Scale starts from bottom (higher pixel value)
         endPx = padding; // Scale ends at top (lower pixel value)
         effectiveLength = startPx - endPx;
     }
@@ -182,12 +182,12 @@ function updateIndicatorAndConfidence() {
     if (props.orientation === 'horizontal') {
         d3svg.select(".confidence-box")
             .attr("x", pos - confidencePx / 2)
-            .attr("y", initialSvgHeight / 2 - 10)
+            .attr("y", svgHeight.value / 2 - 10) // Use dynamic svgHeight
             .attr("width", confidencePx)
             .attr("height", 20);
     } else { // vertical
         d3svg.select(".confidence-box")
-            .attr("x", verticalScaleWidth / 2 - 10)
+            .attr("x", svgWidth.value / 2 - 10) // Use dynamic svgWidth
             .attr("y", pos - confidencePx / 2)
             .attr("width", 20)
             .attr("height", confidencePx);
@@ -195,7 +195,7 @@ function updateIndicatorAndConfidence() {
 }
 
 /**
- * Draws or redraws the entire scale based on current props.
+ * Draws or redraws the entire scale based on current props and dynamic dimensions.
  */
 function drawScale() {
     if (!svgRef.value) {
@@ -206,6 +206,8 @@ function drawScale() {
     console.log("Drawing scale. Orientation:", props.orientation);
     console.log("Current Padding:", props.scalePadding);
     console.log("Percentages:", props.percentCenter, props.percentMid, props.percentOuter);
+    console.log("SVG Dimensions:", svgWidth.value, svgHeight.value);
+
 
     const d3svg = d3.select(svgRef.value);
     d3svg.selectAll("*").remove(); // Clear previous SVG content
@@ -222,31 +224,29 @@ function drawScale() {
     const confidenceColor = props.confidenceColor;
     const transitionDuration = props.transitionDuration;
 
-    // Set SVG dimensions based on orientation
+    // Set SVG dimensions and viewBox based on orientation and current size
     if (props.orientation === 'horizontal') {
-        d3svg.attr("width", initialSvgWidth)
-            .attr("height", initialSvgHeight)
-            .attr("viewBox", `0 0 ${initialSvgWidth} ${initialSvgHeight}`);
-        scale = createCustomScale(initialSvgWidth, props.percentCenter / 100, props.percentMid / 100, props.percentOuter / 100, props.orientation, props.scalePadding);
-        scaleLinePos = initialSvgHeight / 2; // Center vertically
+        d3svg.attr("width", svgWidth.value)
+            .attr("height", svgHeight.value)
+            .attr("viewBox", `0 0 ${svgWidth.value} ${svgHeight.value}`);
+        scale = createCustomScale(svgWidth.value, props.percentCenter / 100, props.percentMid / 100, props.percentOuter / 100, props.orientation, props.scalePadding);
+        scaleLinePos = svgHeight.value / 2; // Center vertically using dynamic height
 
-        // Calculate indicator position based on distance percentage
-        const indicatorDistancePx = (indicatorDistancePercent / 100) * initialSvgHeight;
+        // Calculate indicator position based on distance percentage of current SVG height
+        const indicatorDistancePx = (indicatorDistancePercent / 100) * svgHeight.value;
         // Indicator points DOWN towards the scale line (from above)
-        // Tip at (0, scaleLinePos - indicatorDistancePx + indicatorSize), Base at (0, scaleLinePos - indicatorDistancePx)
         indicatorPoints = `0,${scaleLinePos - indicatorDistancePx + indicatorSize} -${indicatorSize / 2},${scaleLinePos - indicatorDistancePx} ${indicatorSize / 2},${scaleLinePos - indicatorDistancePx}`;
         tickTextOffset = 15; // Below ticks
     } else { // vertical
-        d3svg.attr("width", verticalScaleWidth)
-            .attr("height", initialSvgWidth) // Use initialSvgWidth as height for vertical
-            .attr("viewBox", `0 0 ${verticalScaleWidth} ${initialSvgWidth}`);
-        scale = createCustomScale(initialSvgWidth, props.percentCenter / 100, props.percentMid / 100, props.percentOuter / 100, props.orientation, props.scalePadding); // Scale based on height (initialSvgWidth)
-        scaleLinePos = verticalScaleWidth / 2; // Center horizontally within the new verticalSvgWidth
+        d3svg.attr("width", svgWidth.value) // Use dynamic width for vertical SVG
+            .attr("height", svgHeight.value) // Use dynamic height for vertical SVG
+            .attr("viewBox", `0 0 ${svgWidth.value} ${svgHeight.value}`);
+        scale = createCustomScale(svgHeight.value, props.percentCenter / 100, props.percentMid / 100, props.percentOuter / 100, props.orientation, props.scalePadding); // Scale based on current height
+        scaleLinePos = svgWidth.value / 2; // Center horizontally using dynamic width
 
-        // Calculate indicator position based on distance percentage
-        const indicatorDistancePx = (indicatorDistancePercent / 100) * verticalScaleWidth;
+        // Calculate indicator position based on distance percentage of current SVG width
+        const indicatorDistancePx = (indicatorDistancePercent / 100) * svgWidth.value;
         // Indicator points LEFT towards the scale line (from right)
-        // Tip at (scaleLinePos - indicatorDistancePx + indicatorSize, 0), Base at (scaleLinePos - indicatorDistancePx, -indicatorSize/2) (scaleLinePos - indicatorDistancePx, indicatorSize/2)
         indicatorPoints = `${scaleLinePos - indicatorDistancePx + indicatorSize},0 ${scaleLinePos - indicatorDistancePx}, -${indicatorSize / 2} ${scaleLinePos - indicatorDistancePx},${indicatorSize / 2}`;
         tickTextOffset = 20; // To the right of ticks
     }
@@ -346,7 +346,75 @@ function drawScale() {
 
 // On component mount, draw the initial scale
 onMounted(() => {
-    drawScale();
+    // Initialize ResizeObserver
+    resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+            if (entry.contentBoxSize) {
+                const newWidth = entry.contentBoxSize[0].inlineSize;
+                const newHeight = entry.contentBoxSize[0].blockSize;
+                // Only update if dimensions have actually changed significantly
+                if (svgWidth.value !== newWidth || svgHeight.value !== newHeight) {
+                    svgWidth.value = newWidth;
+                    svgHeight.value = newHeight;
+                    drawScale(); // Redraw the scale when dimensions change
+                }
+            }
+        }
+    });
+
+    // Observe the parent element of the SVG to react to its size changes
+    // The parent div #scale-container has w-full, making it responsive
+    if (svgRef.value && svgRef.value.parentElement) {
+        resizeObserver.observe(svgRef.value.parentElement);
+    }
+
+    // Initial draw based on initial dimensions (before observer might trigger)
+    // Get initial dimensions from the parent container
+    if (svgRef.value && svgRef.value.parentElement) {
+        svgWidth.value = svgRef.value.parentElement.clientWidth;
+        svgHeight.value = props.orientation === 'horizontal' ? 200 : 900; // Default heights for initial render
+        // For vertical, we might want a fixed width, but dynamic height.
+        // Let's make it responsive based on parent's width, and set height based on orientation.
+        // The previous verticalScaleWidth (300) can be a target width for vertical mode.
+        // For simplicity, let's make the SVG take the full width of its container,
+        // and its height will be fixed for horizontal, or a larger fixed value for vertical.
+        // This is a common approach for responsive D3 charts where aspect ratio is important.
+        // If we want the SVG itself to be fully fluid in both dimensions, we'd need more complex logic
+        // or rely purely on viewBox and CSS aspect-ratio.
+        // For now, let's assume the parent dictates width, and height is semi-fixed or proportional.
+        // Given the previous verticalScaleWidth, let's interpret it as a desired width for the SVG in vertical mode.
+        // And initialSvgHeight as desired height for horizontal mode.
+
+        // Let's simplify: svgWidth will always be parent.clientWidth.
+        // svgHeight will be fixed based on orientation, or a ratio of svgWidth.
+        // For this problem, fixed height for horizontal, and fixed width/larger height for vertical seems intended.
+
+        // Let's stick to the previous fixed dimensions but make them apply to the SVG directly,
+        // and then use the resize observer to adjust the SVG's actual 'width' and 'height' attributes,
+        // while the 'viewBox' maintains the internal coordinate system.
+
+        // Re-evaluating the initial fixed dimensions vs. responsiveness:
+        // The `w-full` on `#scale-container` means the SVG's parent will take full width.
+        // The SVG itself needs to fill that width and have an appropriate height.
+        // If `svgWidth.value` and `svgHeight.value` are updated by ResizeObserver,
+        // then `createCustomScale` should use these dynamic values.
+
+        // Initial dimensions for the SVG container, before any resize event
+        const parentWidth = svgRef.value.parentElement.clientWidth;
+        const parentHeight = props.orientation === 'horizontal' ? initialSvgHeight : initialSvgWidth; // Default height for vertical is initialSvgWidth (900)
+
+        svgWidth.value = parentWidth;
+        svgHeight.value = parentHeight;
+
+        drawScale(); // Initial draw
+    }
+});
+
+// Clean up ResizeObserver on unmount
+onUnmounted(() => {
+    if (resizeObserver && svgRef.value && svgRef.value.parentElement) {
+        resizeObserver.unobserve(svgRef.value.parentElement);
+    }
 });
 
 // Watch for changes in relevant props to redraw or update the scale elements
@@ -374,7 +442,8 @@ watch(
         () => props.percentMid,
         () => props.percentOuter,
         () => props.indicatorSize,
-        () => props.indicatorDistancePercent
+        () => props.indicatorDistancePercent,
+        // svgWidth and svgHeight are already triggering drawScale via ResizeObserver
     ],
     () => {
         drawScale();
@@ -389,14 +458,17 @@ watch(
 <style scoped>
 /* Scoped styles for the LinearScale component */
 svg {
+    /* These properties will be set dynamically by JS, but provide good defaults */
+    display: block;
+    /* Ensures it takes up its own space */
+    width: 100%;
+    /* Make it fill its parent's width */
+    height: auto;
+    /* Allow height to adjust based on viewBox if not explicitly set */
     background-color: #ffffff;
-    /* White background for the scale */
     border-radius: 12px;
-    /* Rounded corners */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    /* Subtle shadow */
     margin-bottom: 2rem;
-    /* Space below the SVG */
 }
 
 .tick line {
