@@ -1,18 +1,18 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'; // Added computed
 import LinearScale from './components/LinearScale.vue';
 
 // Reactive state for all configurable options
 const currentValue = ref(0);
-const indicatorSize = ref(22);
+const indicatorSize = ref(20);
 const indicatorColor = ref('#ef4444');
 const indicatorOpacity = ref(1.0);
-const indicatorDistancePercent = ref(20);
+const indicatorDistancePercent = ref(5);
 const confidenceRangePercent = ref(5);
 const confidenceOpacity = ref(0.6);
 const confidenceColor = ref('#a7f3d0');
-const confidenceBoxCrossDimension = ref(10); // New reactive state for cross dimension
-const transitionDuration = ref(0.9);
+const confidenceBoxCrossDimension = ref(20);
+const transitionDuration = ref(0.3);
 const orientation = ref('horizontal');
 const scalePadding = ref(50);
 const percentCenter = ref(40);
@@ -22,10 +22,37 @@ const simulationFrequency = ref(1);
 const isSimulationRunning = ref(false);
 
 // New reactive states for container dimensions
-const scaleContainerWidth = ref(450);
-const scaleContainerHeight = ref(100);
+const scaleContainerWidth = ref(900);
+const scaleContainerHeight = ref(200);
+
+// New reactive state for domain breakpoints
+const domainBreakpointsInput = ref('-10, -5, -1, 0, 1, 5, 10');
+const domainBreakpointsError = ref(false);
 
 let simulationInterval = null;
+
+// Computed property to parse the domain breakpoints input
+const parsedDomainBreakpoints = computed(() => {
+  try {
+    const parsed = domainBreakpointsInput.value
+      .split(',')
+      .map(s => parseFloat(s.trim()))
+      .filter(n => !isNaN(n))
+      .sort((a, b) => a - b); // Ensure they are sorted
+
+    // Basic validation: must have at least 2 points and 0 must be included for current logic
+    if (parsed.length < 2 || !parsed.includes(0)) {
+      domainBreakpointsError.value = true;
+      return []; // Return empty or a default invalid state
+    }
+    domainBreakpointsError.value = false;
+    return parsed;
+  } catch (e) {
+    domainBreakpointsError.value = true;
+    return [];
+  }
+});
+
 
 // Function to check percentage sum and update error message
 const checkPercentages = () => {
@@ -44,6 +71,12 @@ const checkPercentages = () => {
 watch([percentCenter, percentMid, percentOuter], () => {
   checkPercentages();
 });
+
+// Watch for changes in domain breakpoints input to trigger re-render
+watch(domainBreakpointsInput, () => {
+  // This will trigger the LinearScale component to re-draw via its prop watch
+});
+
 
 // Perform initial check after component is mounted
 onMounted(() => {
@@ -66,7 +99,16 @@ const startSimulation = () => {
   const intervalMs = 1000 / frequency;
 
   simulationInterval = setInterval(() => {
-    currentValue.value = Math.random() * 20 - 10; // Random value between -10 and 10
+    // Generate random value within the parsed domain breakpoints
+    const domain = parsedDomainBreakpoints.value;
+    if (domain.length > 1) {
+      const minVal = domain[0];
+      const maxVal = domain[domain.length - 1];
+      currentValue.value = Math.random() * (maxVal - minVal) + minVal;
+    } else {
+      currentValue.value = 0; // Fallback if domain is invalid
+    }
+
     confidenceRangePercent.value = Math.random() * 15 + 1; // Random confidence between 1% and 16%
   }, intervalMs);
 };
@@ -97,14 +139,16 @@ onUnmounted(() => {
         :confidenceRangePercent="confidenceRangePercent" :confidenceOpacity="confidenceOpacity"
         :confidenceColor="confidenceColor" :confidenceBoxCrossDimension="confidenceBoxCrossDimension"
         :transitionDuration="transitionDuration" :orientation="orientation" :scalePadding="scalePadding"
-        :percentCenter="percentCenter" :percentMid="percentMid" :percentOuter="percentOuter" />
+        :percentCenter="percentCenter" :percentMid="percentMid" :percentOuter="percentOuter"
+        :domainBreakpoints="parsedDomainBreakpoints" />
     </div>
 
     <div class="controls-container mt-8">
       <div class="control-section">
         <label for="value-slider" class="text-lg font-medium text-gray-700">Adjust Indicator Value:</label>
-        <input type="range" id="value-slider" min="-10" max="10" step="0.01" v-model.number="currentValue"
-          :disabled="isSimulationRunning">
+        <input type="range" id="value-slider" :min="parsedDomainBreakpoints[0] || -10"
+          :max="parsedDomainBreakpoints[parsedDomainBreakpoints.length - 1] || 10" step="0.01"
+          v-model.number="currentValue" :disabled="isSimulationRunning">
         <div class="text-gray-600">Current Value: <span id="current-value">{{ currentValue.toFixed(2) }}</span></div>
       </div>
 
@@ -122,6 +166,14 @@ onUnmounted(() => {
               :disabled="isSimulationRunning">
           </div>
         </div>
+      </div>
+
+      <div class="control-section">
+        <label class="text-lg font-medium text-gray-700">Domain Breakpoints (comma-separated):</label>
+        <input type="text" id="domain-breakpoints" v-model="domainBreakpointsInput" class="w-full p-2 border rounded-md"
+          :class="{ 'border-red-500': domainBreakpointsError }" :disabled="isSimulationRunning">
+        <p v-if="domainBreakpointsError" class="text-red-600 text-sm mt-1">Invalid format or missing 0. Must be
+          comma-separated numbers, e.g., -10, -5, -1, 0, 1, 5, 10</p>
       </div>
 
       <div class="control-section">
