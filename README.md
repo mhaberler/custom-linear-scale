@@ -32,6 +32,7 @@ import LinearScale from './components/LinearScale.vue';
 const myValue = ref(0.5);
 const myIndicatorColor = ref('#1e40af'); // A blue color
 const myOrientation = ref('vertical');
+const myDomainBreakpoints = ref([-10, -5, -1, 0, 1, 5, 10]); // Example breakpoints for the scale's domain
 </script>
 
 <template>
@@ -48,6 +49,7 @@ const myOrientation = ref('vertical');
       :confidenceRangePercent="10"
       :confidenceBoxCrossDimension="30"
       :transitionDuration="0.5"
+      :domainBreakpoints="[-10, -5, -1, 0, 1, 5, 10]"
     />
   </div>
 </template>
@@ -62,4 +64,4 @@ The scale was inspired by this Vertical Speed Indicator:
 
 # Conversation
 
-this was done with Gemini, the complete conversation is here: https://gemini.google.com/share/75d7bfdb242a
+this was done with Gemini, the complete conversation is here: https://g.co/gemini/share/579d91d9489e
