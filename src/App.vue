@@ -4,15 +4,15 @@ import LinearScale from './components/LinearScale.vue';
 
 // Reactive state for all configurable options
 const currentValue = ref(0);
-const indicatorSize = ref(20);
+const indicatorSize = ref(22);
 const indicatorColor = ref('#ef4444');
 const indicatorOpacity = ref(1.0);
-const indicatorDistancePercent = ref(5);
+const indicatorDistancePercent = ref(20);
 const confidenceRangePercent = ref(5);
 const confidenceOpacity = ref(0.6);
 const confidenceColor = ref('#a7f3d0');
-const confidenceBoxCrossDimension = ref(20); // New reactive state for cross dimension
-const transitionDuration = ref(0.3);
+const confidenceBoxCrossDimension = ref(10); // New reactive state for cross dimension
+const transitionDuration = ref(0.9);
 const orientation = ref('horizontal');
 const scalePadding = ref(50);
 const percentCenter = ref(40);
@@ -22,8 +22,8 @@ const simulationFrequency = ref(1);
 const isSimulationRunning = ref(false);
 
 // New reactive states for container dimensions
-const scaleContainerWidth = ref(900);
-const scaleContainerHeight = ref(200);
+const scaleContainerWidth = ref(450);
+const scaleContainerHeight = ref(100);
 
 let simulationInterval = null;
 

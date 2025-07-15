@@ -6,6 +6,7 @@
       "dependencies": {
         "@tailwindcss/vite": "^4.1.11",
         "d3": "^7.9.0",
+        "qrcode-terminal": "^0.12.0",
         "tailwindcss": "^4.1.11",
         "vue": "^3.5.17",
         "vue-tsc": "^2.2.12",
@@ -338,6 +339,8 @@
     "picomatch": ["picomatch@4.0.2", "", {}, "sha512-M7BAV6Rlcy5u+m6oPhAPFgJTzAioX/6B0DxyvDlo9l8+T3nLKbrczg2WLUyzd45L8RqfUMyGPzekbMvX2Ldkwg=="],
 
     "postcss": ["postcss@8.5.6", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg=="],
+
+    "qrcode-terminal": ["qrcode-terminal@0.12.0", "", { "bin": { "qrcode-terminal": "./bin/qrcode-terminal.js" } }, "sha512-EXtzRZmC+YGmGlDFbXKxQiMZNwCLEO6BANKXG4iCtSIM0yqc/pappSx3RIKr4r0uh5JsBckOXeKrB3Iz7mdQpQ=="],
 
     "robust-predicates": ["robust-predicates@3.0.2", "", {}, "sha512-IXgzBWvWQwE6PrDI05OvmXUIruQTcoMDzRsOd5CDvHCVLcLHMTSYvOK5Cm46kWqlV3yAbuSpBZdJ5oP5OUoStg=="],
 
