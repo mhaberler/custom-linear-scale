@@ -23,6 +23,36 @@ This project demonstrates a highly configurable linear scale visualization built
 * **Vue 3 Component:** Encapsulated as a reusable Vue component.
 * **Vite & Tailwind CSS v4:** Modern development setup for fast development and sleek styling.
 
+## Usage example
+````javascript
+<script setup>
+import { ref } from 'vue';
+import LinearScale from './components/LinearScale.vue';
+
+const myValue = ref(0.5);
+const myIndicatorColor = ref('#1e40af'); // A blue color
+const myOrientation = ref('vertical');
+</script>
+
+<template>
+  <div style="width: 400px; height: 600px; border: 1px solid #ccc;">
+    <LinearScale
+      :value="myValue"
+      :indicatorColor="myIndicatorColor"
+      :orientation="myOrientation"
+      :scalePadding="60"
+      :percentCenter="50"
+      :percentMid="30"
+      :percentOuter="20"
+      :indicatorSize="25"
+      :confidenceRangePercent="10"
+      :confidenceBoxCrossDimension="30"
+      :transitionDuration="0.5"
+    />
+  </div>
+</template>
+````
+
 ## Appearance
 
 The scale was inspired by this Vertical Speed Indicator:
